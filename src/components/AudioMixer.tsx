@@ -14,11 +14,10 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
 
   useEffect(() => {
     if (songBase64 && voiceBase64) {
-      // Small delay to ensure WebView is ready
       setTimeout(() => {
         const script = `mixAudio("${songBase64}", "${voiceBase64}");`;
         webviewRef.current?.injectJavaScript(script);
-      }, 1000);
+      }, 500);
     }
   }, [songBase64, voiceBase64]);
 
@@ -37,21 +36,6 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return bytes.buffer;
           }
 
-          function audioBufferToWav(buffer, opt) {
-            opt = opt || {};
-            var numChannels = buffer.numberOfChannels;
-            var sampleRate = buffer.sampleRate;
-            var format = opt.float32 ? 3 : 1;
-            var bitDepth = format === 3 ? 32 : 16;
-            var result;
-            if (numChannels === 2) {
-              result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
-            } else {
-              result = buffer.getChannelData(0);
-            }
-            return encodeWAV(result, numChannels, sampleRate, format, bitDepth);
-          }
-
           function interleave(inputL, inputR) {
             var length = inputL.length + inputR.length;
             var result = new Float32Array(length);
@@ -65,37 +49,27 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return result;
           }
 
-          function encodeWAV(samples, numChannels, sampleRate, format, bitDepth) {
-            var bytesPerSample = bitDepth / 8;
-            var blockAlign = numChannels * bytesPerSample;
-            var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+          function encodeWAVOptimized(samples, numChannels, sampleRate) {
+            var buffer = new ArrayBuffer(44 + samples.length * 2);
             var view = new DataView(buffer);
+
             writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            view.setUint32(4, 36 + samples.length * 2, true);
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, format, true);
+            view.setUint16(20, 1, true);
             view.setUint16(22, numChannels, true);
             view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * blockAlign, true);
-            view.setUint16(32, blockAlign, true);
-            view.setUint16(34, bitDepth, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
             writeString(view, 36, 'data');
-            view.setUint32(40, samples.length * bytesPerSample, true);
-            if (format === 1) {
-               floatTo16BitPCM(view, 44, samples);
-            } else {
-               floatTo32BitFloat(view, 44, samples);
-            }
-            var binary = '';
-            var bytes = new Uint8Array(buffer);
-            var len = bytes.byteLength;
-            // Chunked base64 conversion to prevent stack overflow
-            for (var i = 0; i < len; i+=32768) {
-               binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 32768, len)));
-            }
-            return window.btoa(binary);
+            view.setUint32(40, samples.length * 2, true);
+
+            floatTo16BitPCM(view, 44, samples);
+
+            return buffer;
           }
 
           function floatTo16BitPCM(output, offset, input) {
@@ -104,11 +78,6 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
             }
           }
-          function floatTo32BitFloat(output, offset, input) {
-             for (var i = 0; i < input.length; i++, offset += 4) {
-               output.setFloat32(offset, input[i], true);
-             }
-          }
 
           function writeString(view, offset, string) {
             for (var i = 0; i < string.length; i++) {
@@ -116,44 +85,77 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             }
           }
 
+          function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const result = reader.result;
+                resolve(result.split(',')[1]); 
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
+
           window.mixAudio = async function(songB64, voiceB64) {
             try {
-              // Notify started
-              // window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Mixing started...' }));
-
               const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
               
-              const songBuffer = base64ToArrayBuffer(songB64);
-              const songAudioBuffer = await audioCtx.decodeAudioData(songBuffer);
+              const songBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(songB64));
+              const voiceBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(voiceB64));
               
-              const voiceBuffer = base64ToArrayBuffer(voiceB64);
-              const voiceAudioBuffer = await audioCtx.decodeAudioData(voiceBuffer);
+              const outputLength = Math.max(songBuffer.length, voiceBuffer.length);
               
-              const length = Math.max(songAudioBuffer.length, voiceAudioBuffer.length);
-              const channels = 2; 
-              
-              const outputBuffer = audioCtx.createBuffer(channels, length, songAudioBuffer.sampleRate);
-              
-              const songVol = 0.7;
-              const voiceVol = 1.5;
+              // !!! KRİTİK DEĞİŞİKLİK BURADA !!!
+              // 44100 yerine 22050 yaparak dosya boyutunu yarıya indiriyoruz.
+              // Bu, OOM (Out Of Memory) hatasını engeller.
+              const sampleRate = 22050; 
 
-              for (let i = 0; i < channels; i++) {
-                const outputData = outputBuffer.getChannelData(i);
-                const songData = songAudioBuffer.getChannelData(i < songAudioBuffer.numberOfChannels ? i : 0);
-                const voiceData = voiceAudioBuffer.getChannelData(i < voiceAudioBuffer.numberOfChannels ? i : 0);
-                
-                for (let j = 0; j < length; j++) {
-                  const s = (j < songData.length) ? songData[j] * songVol : 0;
-                  const v = (j < voiceData.length) ? voiceData[j] * voiceVol : 0;
-                  outputData[j] = s + v;
-                }
-              }
+              const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+                2, 
+                outputLength,
+                sampleRate
+              );
+
+              const songSource = offlineCtx.createBufferSource();
+              songSource.buffer = songBuffer;
+              const songGain = offlineCtx.createGain();
+              songGain.gain.value = 0.7;
+              songSource.connect(songGain);
+              songGain.connect(offlineCtx.destination);
+
+              const voiceSource = offlineCtx.createBufferSource();
+              voiceSource.buffer = voiceBuffer;
+              const voiceGain = offlineCtx.createGain();
+              voiceGain.gain.value = 1.5;
+              voiceSource.connect(voiceGain);
+              voiceGain.connect(offlineCtx.destination);
+
+              songSource.start(0);
+              voiceSource.start(0);
+
+              const renderedBuffer = await offlineCtx.startRendering();
+
+              // Resample edilmiş buffer'ı işle
+              const interleavedData = interleave(renderedBuffer.getChannelData(0), renderedBuffer.getChannelData(1));
               
-              const wavB64 = audioBufferToWav(outputBuffer);
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'success', data: wavB64 }));
+              // Encoding sırasında yeni sampleRate (22050) kullanılıyor
+              const wavBuffer = encodeWAVOptimized(interleavedData, 2, sampleRate);
+              
+              const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+              
+              // Bellek temizliği için yardımcı (Opsiyonel, tarayıcıya ipucu verir)
+              if (window.gc) window.gc();
+
+              const finalBase64 = await blobToBase64(blob);
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'success', data: finalBase64 }));
               
             } catch (e) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: e.message }));
+              window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                type: 'error', 
+                message: 'Mix error: ' + e.message 
+              }));
             }
           };
         </script>

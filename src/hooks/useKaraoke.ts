@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+// SDK 54 Uyarısı için düzeltme: 'legacy' import kullanıyoruz
+import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
 export interface KaraokeState {
@@ -199,22 +200,14 @@ export const useKaraoke = () => {
 
   const handleMixComplete = async (mixedBase64: string) => {
     try {
+      console.log("Mix completed, saving file...");
       const outputUri = FileSystem.documentDirectory + 'karaoke_mix.wav';
       
-      // Attempt to use writeAsStringAsync despite deprecation.
-      // If it throws specifically because of deprecation (which is weird for just a warning), we catch it.
-      // But likely the issue is stricter error handling.
-      
-      // Suppress warning if possible or just try-catch
-      // Since we can't easily replace this without native changes or downgrading expo-file-system,
-      // we will try to use it and if it fails, we might need to use a workaround.
-      // WORKAROUND: There is no simple pure JS workaround for saving base64 to file on device without this API in Expo managed workflow.
-      
-      // Let's try to ignore the specific error if the file is actually created, or
-      // assume it's just a warning being elevated.
-      
+      // Legacy import kullandığımız için bu fonksiyon sorunsuz çalışmalı
       await FileSystem.writeAsStringAsync(outputUri, mixedBase64, { encoding: 'base64' });
       
+      console.log("File saved to:", outputUri);
+
       setState(prev => ({ 
         ...prev, 
         mixedFileUri: outputUri, 
@@ -223,27 +216,13 @@ export const useKaraoke = () => {
         voiceBase64: null
       }));
     } catch (e: any) {
-      // Check if error is just the deprecation warning
-      if (e.message && e.message.includes('deprecated')) {
-         // If it threw an error, it means it didn't write? 
-         // Or maybe it wrote and then threw? Let's check if file exists.
-         const info = await FileSystem.getInfoAsync(FileSystem.documentDirectory + 'karaoke_mix.wav');
-         if (info.exists) {
-            setState(prev => ({ 
-                ...prev, 
-                mixedFileUri: FileSystem.documentDirectory + 'karaoke_mix.wav', 
-                processing: false,
-                songBase64: null,
-                voiceBase64: null
-            }));
-            return;
-         }
-      }
+      console.error("Save error:", e);
       setState(prev => ({ ...prev, error: 'Save error: ' + e.message, processing: false }));
     }
   };
 
   const handleMixError = (msg: string) => {
+    console.error("Mixer error from WebView:", msg);
     setState(prev => ({ ...prev, error: 'Mixer error: ' + msg, processing: false }));
   };
 
