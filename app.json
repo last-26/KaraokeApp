@@ -13,18 +13,33 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eterna.karaokeapp",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow KaraokeApp to access your microphone for recording singing."
+      }
     },
     "android": {
+      "package": "com.eterna.karaokeapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["RECORD_AUDIO", "WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow KaraokeApp to access your microphone for recording singing."
+        }
+      ]
+    ]
   }
 }
