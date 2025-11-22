@@ -172,6 +172,38 @@ export const useKaraoke = () => {
     }
   };
 
+  // YENİ EKLENEN RESET FONKSİYONU
+  const reset = async () => {
+    try {
+      // Eğer çalan bir şeyler varsa durdur ve temizle
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      if (recordingRef.current) {
+        await recordingRef.current.stopAndUnloadAsync();
+        recordingRef.current = null;
+      }
+
+      // State'i başlangıç haline getir
+      setState({
+        isRecording: false,
+        isPlaying: false,
+        positionMillis: 0,
+        durationMillis: 0,
+        processing: false,
+        mixedFileUri: null,
+        voiceFileUri: null,
+        error: null,
+        songBase64: null,
+        voiceBase64: null,
+        metering: -160,
+      });
+    } catch (error) {
+      console.error("Reset error:", error);
+    }
+  };
+
   const prepareForMixing = async (voiceUri: string) => {
     try {
       const songAsset = Asset.fromModule(require('../../assets/song.mp3'));
@@ -244,6 +276,7 @@ export const useKaraoke = () => {
     ...state,
     startSession,
     stopSession,
+    reset, // <-- Reset'i dışarıya açtık
     handleMixComplete,
     handleMixError,
     requestPermission

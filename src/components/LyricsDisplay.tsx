@@ -10,27 +10,19 @@ interface Props {
 export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   
+  // Hangi satırın aktif olduğunu bul
   const activeIndex = lyrics.findIndex(
     l => currentTime >= l.startTime && currentTime <= l.endTime
   );
 
-  // If no active line found but we are past the last line, index is -1.
-  // If we haven't started, index is -1. 
-  // We need to handle "upcoming" lines correctly.
-  
-  // Filter lyrics to only show active and future lines
-  // We keep the active line (or the first upcoming line if between lines)
-  
-  // Let's find the first line that hasn't ended yet
-  const firstVisibleIndex = lyrics.findIndex(l => l.endTime > currentTime);
-  
-  const visibleLyrics = firstVisibleIndex >= 0 ? lyrics.slice(firstVisibleIndex) : [];
-
-  // Since we are removing items, scrolling is less needed, but we might want to keep the current line at the top.
-  // Actually, if we just render the list, the "current" line will naturally be at the top (index 0 of visibleLyrics).
-  
-  // However, to prevent jumpiness, we might want to keep 1 previous line or just smooth the transition.
-  // User asked to "remove" read parts.
+  // Otomatik Kaydırma Efekti
+  useEffect(() => {
+    if (activeIndex !== -1 && scrollViewRef.current) {
+      // Her satır yaklaşık 60-80px. Aktif satırı ortaya getirmek için hesaplama:
+      // (activeIndex * SatırYüksekliği) - (EkranYarısı)
+      scrollViewRef.current.scrollTo({ y: activeIndex * 60, animated: true });
+    }
+  }, [activeIndex]);
 
   return (
     <View style={styles.wrapper}>
@@ -40,11 +32,10 @@ export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ height: 50 }} /> 
-        {visibleLyrics.map((line, index) => {
-          // The first item in visibleLyrics is the "current" or "next" line.
-          // Check if it is actively being sung (currentTime is within its range)
-          const isActive = currentTime >= line.startTime && currentTime <= line.endTime;
+        <View style={{ height: 200 }} /> 
+        {lyrics.map((line, index) => {
+          const isActive = index === activeIndex;
+          // Eğer henüz şarkı o satıra gelmediyse veya geçtiyse daha soluk göster
           
           return (
             <View key={line.id} style={styles.line}>
@@ -54,7 +45,7 @@ export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
             </View>
           );
         })}
-        <View style={{ height: 200 }} /> 
+        <View style={{ height: 400 }} /> 
       </ScrollView>
     </View>
   );
@@ -64,7 +55,8 @@ const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#fafafa',
+    // Arka planı şeffaf yapıyoruz ki App.tsx'teki gradient görünsün
+    backgroundColor: 'transparent', 
   },
   container: {
     flex: 1,
@@ -74,23 +66,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   line: {
-    minHeight: 80,
+    minHeight: 60, // Satır yüksekliği
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 20,
   },
   text: {
-    fontSize: 20,
-    color: '#999',
+    fontSize: 22,
+    color: '#ffffff', // Koyu arka plan için beyaz metin
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+    opacity: 0.4, // Pasif satırlar soluk
   },
   activeText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#E91E63',
-    textShadowColor: 'rgba(233, 30, 99, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    color: '#FFD700', // Altın sarısı aktif renk
+    opacity: 1,       // Aktif satır tam görünür
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+    transform: [{ scale: 1.1 }], // Hafif büyütme efekti
   },
 });

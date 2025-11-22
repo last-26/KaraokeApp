@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, SafeAreaView, Alert, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, SafeAreaView, Alert, Platform, Animated, Easing } from 'react-native';
 import { Asset, useAssets } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Android'de dosya kaydetmek için gerekli
 const { StorageAccessFramework } = FileSystem;
 
 import { useKaraoke } from './src/hooks/useKaraoke';
@@ -13,6 +13,7 @@ import { parseSRT, LyricLine } from './src/utils/srtParser';
 import { LyricsDisplay } from './src/components/LyricsDisplay';
 import { AudioMixer } from './src/components/AudioMixer';
 
+// ... (VolumeVisualizer bileşeni AYNI KALSIN) ...
 const VolumeVisualizer = ({ metering }: { metering: number }) => {
   const normalizedLevel = Math.min(100, Math.max(0, (metering + 60) * (100 / 60)));
   const segments = Array.from({ length: 15 });
@@ -52,6 +53,7 @@ export default function App() {
   const {
     startSession,
     stopSession,
+    reset, // <-- Hook'tan reset'i çektik
     handleMixComplete,
     handleMixError,
     isRecording,
@@ -72,6 +74,13 @@ export default function App() {
   const [previewSound, setPreviewSound] = useState<Audio.Sound | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
+  // Animasyon Değerleri
+  const pulseAnim = useRef(new Animated.Value(1)).current; // Kayıt butonu için
+  
+  // Sonuç ekranı giriş animasyonları
+  const resultFadeAnim = useRef(new Animated.Value(0)).current; 
+  const resultSlideAnim = useRef(new Animated.Value(50)).current; // Aşağıdan (50px) başlar
+
   useEffect(() => {
     if (assets) {
       loadLyrics(assets[0]);
@@ -85,16 +94,58 @@ export default function App() {
     }
   }, [error]);
 
+  // Mix Ready olduğunda Animasyonu Tetikle
+  useEffect(() => {
+    if (mixedFileUri) {
+      Animated.parallel([
+        Animated.timing(resultFadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.exp),
+        }),
+        Animated.timing(resultSlideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.exp),
+        }),
+      ]).start();
+    } else {
+      // Reset durumunda değerleri sıfırla
+      resultFadeAnim.setValue(0);
+      resultSlideAnim.setValue(50);
+    }
+  }, [mixedFileUri]);
+
+  // Kayıt butonu animasyonu (Aynı kaldı)
+  useEffect(() => {
+    if (isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording]);
+
   const loadLyrics = async (lyricAsset: Asset) => {
     try {
-      if (!lyricAsset.localUri) {
-        await lyricAsset.downloadAsync();
-      }
-      
+      if (!lyricAsset.localUri) await lyricAsset.downloadAsync();
       const uri = lyricAsset.localUri || lyricAsset.uri;
       const response = await fetch(uri);
       const content = await response.text();
-      
       const parsed = parseSRT(content);
       setLyrics(parsed);
       setLyricsLoaded(true);
@@ -106,7 +157,6 @@ export default function App() {
 
   const togglePreview = async () => {
     if (!mixedFileUri) return;
-
     try {
       if (previewSound) {
         const status = await previewSound.getStatusAsync();
@@ -125,12 +175,7 @@ export default function App() {
           return;
         }
       }
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: mixedFileUri },
-        { shouldPlay: true }
-      );
-      
+      const { sound } = await Audio.Sound.createAsync({ uri: mixedFileUri }, { shouldPlay: true });
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {
           if (status.didJustFinish) {
@@ -141,10 +186,8 @@ export default function App() {
           }
         }
       });
-
       setPreviewSound(sound);
       setIsPreviewPlaying(true);
-
     } catch (e) {
       Alert.alert('Error', 'Failed to play preview');
     }
@@ -159,34 +202,19 @@ export default function App() {
     await Sharing.shareAsync(mixedFileUri);
   };
 
-  // DOWNLOAD FONKSİYONU
   const handleDownload = async () => {
     if (!mixedFileUri) return;
-
     try {
       if (Platform.OS === 'android') {
-        // Android için Klasör İzni İste ve Kaydet
         const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (permissions.granted) {
           const directoryUri = permissions.directoryUri;
-          
-          // Dosyayı oku
           const fileContent = await FileSystem.readAsStringAsync(mixedFileUri, { encoding: FileSystem.EncodingType.Base64 });
-          
-          // Yeni dosya oluştur
-          const newFileUri = await StorageAccessFramework.createFileAsync(
-            directoryUri,
-            'karaoke_mix.wav',
-            'audio/wav'
-          );
-          
-          // Yaz
+          const newFileUri = await StorageAccessFramework.createFileAsync(directoryUri, 'karaoke_mix.wav', 'audio/wav');
           await FileSystem.writeAsStringAsync(newFileUri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
-          
           Alert.alert('Success', 'File saved to your device!');
         }
       } else {
-        // iOS'te Share menüsünde "Save to Files" zaten var
         await Sharing.shareAsync(mixedFileUri);
       }
     } catch (e: any) {
@@ -194,13 +222,14 @@ export default function App() {
     }
   };
 
-  const handleNewRecording = async () => {
+  // GÜNCELLENDİ: Artık reset çağırıyor
+  const handleGoHome = async () => {
     if (previewSound) {
       await previewSound.unloadAsync();
       setPreviewSound(null);
       setIsPreviewPlaying(false);
     }
-    startSession();
+    reset(); // useKaraoke içindeki reset fonksiyonu
   };
 
   if (!assets) {
@@ -213,120 +242,138 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Karaoke App</Text>
-      </View>
+    <LinearGradient
+      colors={['#4c669f', '#3b5998', '#192f6a']} 
+      style={styles.container}
+    >
+      <SafeAreaView style={{flex: 1}}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Karaoke Star 🎤</Text>
+        </View>
 
-      <AudioMixer 
-        songBase64={songBase64} 
-        voiceBase64={voiceBase64} 
-        onMixComplete={handleMixComplete}
-        onError={handleMixError}
-      />
+        <AudioMixer 
+          songBase64={songBase64} 
+          voiceBase64={voiceBase64} 
+          onMixComplete={handleMixComplete}
+          onError={handleMixError}
+        />
 
-      <View style={styles.content}>
-        {processing ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#E91E63" />
-            <Text style={styles.statusText}>Mixing Audio...</Text>
-            <Text style={styles.subStatus}>High quality mix in progress...</Text>
-          </View>
-        ) : isRecording ? (
-          <View style={{ flex: 1 }}>
-            <View style={styles.lyricsContainer}>
-               <LyricsDisplay lyrics={lyrics} currentTime={positionMillis} />
+        <View style={styles.content}>
+          {processing ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.statusText}>Mixing Audio...</Text>
+              <Text style={styles.subStatus}>High quality mix in progress...</Text>
             </View>
-            
-            <View style={styles.recordingControls}>
-              <Text style={styles.recordingLabel}>RECORDING</Text>
+          ) : isRecording ? (
+            <View style={{ flex: 1 }}>
+              <View style={styles.lyricsContainer}>
+                 <LyricsDisplay lyrics={lyrics} currentTime={positionMillis} />
+              </View>
               
-              <VolumeVisualizer metering={metering} />
+              <View style={styles.recordingControls}>
+                <Text style={styles.recordingLabel}>RECORDING</Text>
+                
+                <VolumeVisualizer metering={metering} />
 
-              <TouchableOpacity style={[styles.button, styles.stopButton]} onPress={stopSession}>
-                <View style={styles.stopIcon} />
-                <Text style={styles.buttonText}>Stop Recording</Text>
-              </TouchableOpacity>
+                <TouchableOpacity onPress={stopSession}>
+                  <Animated.View style={[
+                    styles.button, 
+                    styles.stopButton,
+                    { transform: [{ scale: pulseAnim }] } 
+                  ]}>
+                    <View style={styles.stopIcon} />
+                    <Text style={[styles.buttonText, styles.stopButtonText]}>STOP</Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        ) : mixedFileUri ? (
-          <View style={styles.center}>
-            <Text style={styles.successTitle}>🎉 Mix Ready!</Text>
-            <Text style={styles.successSub}>Your performance has been processed.</Text>
-            
-            <View style={styles.resultCard}>
-              <View style={styles.row}>
+          ) : mixedFileUri ? (
+            // *** GÜNCELLENEN MIX READY EKRANI ***
+            <View style={styles.center}>
+              <Animated.View style={{ 
+                opacity: resultFadeAnim, 
+                transform: [{ translateY: resultSlideAnim }],
+                alignItems: 'center',
+                width: '100%'
+              }}>
+                
+                {/* Başarı İkonu / Emojisi */}
+                <Text style={{ fontSize: 60, marginBottom: 10 }}>🌟</Text>
+                
+                <Text style={[styles.successTitle, {color: 'white'}]}>Mix Ready!</Text>
+                <Text style={[styles.successSub, {color: '#ddd'}]}>Great performance! What's next?</Text>
+                
+                <View style={styles.resultCard}>
+                  <View style={styles.row}>
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, isPreviewPlaying ? styles.playingBtn : styles.playBtn]} 
+                      onPress={togglePreview}
+                    >
+                      <Text style={styles.actionBtnText}>
+                        {isPreviewPlaying ? "⏸ Stop Preview" : "▶ Play Preview"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={[styles.row, { marginTop: 15 }]}>
+                    <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShare}>
+                      <Text style={styles.actionBtnText}>📤 Share</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn]} onPress={handleDownload}>
+                      <Text style={styles.actionBtnText}>⬇️ Download</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {/* Ana Sayfaya Dön Butonu */}
                 <TouchableOpacity 
-                  style={[styles.actionBtn, isPreviewPlaying ? styles.playingBtn : styles.playBtn]} 
-                  onPress={togglePreview}
+                  style={styles.homeButton} 
+                  onPress={handleGoHome}
                 >
-                  <Text style={styles.actionBtnText}>
-                    {isPreviewPlaying ? "⏸ Stop" : "▶ Play"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={[styles.row, { marginTop: 10 }]}>
-                <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShare}>
-                  <Text style={styles.actionBtnText}>📤 Share</Text>
+                  <Text style={styles.homeButtonText}>🏠 Return to Home</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn]} onPress={handleDownload}>
-                  <Text style={styles.actionBtnText}>⬇️ Download</Text>
-                </TouchableOpacity>
+              </Animated.View>
+            </View>
+          ) : (
+            <View style={styles.center}>
+              <View style={styles.heroIcon}>
+                <Text style={{fontSize: 60}}>🎧</Text>
               </View>
+              <Text style={[styles.instructionTitle, {color: 'white'}]}>Ready to Sing?</Text>
+              <Text style={[styles.instruction, {color: '#ddd'}]}>
+                Please use headphones for the best quality and synchronization.
+              </Text>
+              <TouchableOpacity style={[styles.button, styles.startButton]} onPress={startSession}>
+                <Text style={styles.buttonText}>Start Karaoke</Text>
+              </TouchableOpacity>
+              {!lyricsLoaded && <Text style={styles.warning}>Lyrics loading...</Text>}
             </View>
-            
-            <TouchableOpacity 
-              style={styles.secondaryButton} 
-              onPress={handleNewRecording}
-            >
-              <Text style={styles.secondaryButtonText}>🎙 Start New Recording</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.center}>
-            <View style={styles.heroIcon}>
-              <Text style={{fontSize: 60}}>🎧</Text>
-            </View>
-            <Text style={styles.instructionTitle}>Ready to Sing?</Text>
-            <Text style={styles.instruction}>
-              Please use headphones for the best quality and synchronization.
-            </Text>
-            <TouchableOpacity style={[styles.button, styles.startButton]} onPress={startSession}>
-              <Text style={styles.buttonText}>Start Karaoke</Text>
-            </TouchableOpacity>
-            {!lyricsLoaded && <Text style={styles.warning}>Lyrics loading...</Text>}
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
+          )}
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
     paddingTop: 30,
   },
   header: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 3,
+    borderBottomWidth: 0,
     zIndex: 10,
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#333',
+    color: '#fff',
     letterSpacing: 1,
   },
   content: {
@@ -340,12 +387,12 @@ const styles = StyleSheet.create({
   },
   lyricsContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   recordingControls: {
     padding: 30,
     alignItems: 'center',
-    backgroundColor: '#222',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     shadowColor: '#000',
@@ -391,7 +438,7 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     backgroundColor: '#fff',
-    width: '100%',
+    width: 200,
   },
   stopIcon: {
     width: 16,
@@ -409,27 +456,29 @@ const styles = StyleSheet.create({
     color: '#D32F2F', 
   },
   successTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 5,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   successSub: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 40,
+    marginBottom: 30,
+    fontWeight: '500',
   },
   resultCard: {
     width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 2,
+    backgroundColor: 'rgba(255,255,255,0.95)', // Hafif transparan beyaz
+    borderRadius: 24,
+    padding: 24,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    marginBottom: 20,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    marginBottom: 25,
   },
   row: {
     flexDirection: 'row',
@@ -438,10 +487,15 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   playBtn: {
     backgroundColor: '#4CAF50',
@@ -453,20 +507,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#2196F3',
   },
   downloadBtn: {
-    backgroundColor: '#607D8B', // Gri/Mavi ton
+    backgroundColor: '#607D8B',
   },
   actionBtnText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  secondaryButton: {
+  homeButton: {
     paddingVertical: 15,
-    width: '100%',
-    alignItems: 'center',
+    paddingHorizontal: 30,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  secondaryButtonText: {
-    color: '#666',
+  homeButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -474,35 +531,30 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   subStatus: {
     marginTop: 8,
-    color: '#888',
+    color: '#ddd',
   },
   heroIcon: {
     width: 120,
     height: 120,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   instructionTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 10,
   },
   instruction: {
     fontSize: 16,
-    color: '#666',
     textAlign: 'center',
     marginBottom: 40,
     lineHeight: 24,
