@@ -4,7 +4,7 @@ import { Asset, useAssets } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // İkonlar için eklendi
+import { Ionicons } from '@expo/vector-icons'; 
 
 const { StorageAccessFramework } = FileSystem;
 
@@ -12,7 +12,6 @@ import { useKaraoke } from './src/hooks/useKaraoke';
 import { parseSRT, LyricLine } from './src/utils/srtParser';
 import { LyricsDisplay } from './src/components/LyricsDisplay';
 import { AudioMixer } from './src/components/AudioMixer';
-// YENİ BİLEŞENİ İÇE AKTARIYORUZ
 import { AudioPlayer } from './src/components/AudioPlayer';
 
 const VolumeVisualizer = ({ metering }: { metering: number }) => {
@@ -24,11 +23,12 @@ const VolumeVisualizer = ({ metering }: { metering: number }) => {
       {segments.map((_, index) => {
         const threshold = (index + 1) * (100 / segments.length);
         const isActive = normalizedLevel >= threshold;
-        let backgroundColor = '#e0e0e0';
+        let backgroundColor = 'rgba(255,255,255,0.2)';
         if (isActive) {
-          if (index < 8) backgroundColor = '#4CAF50';
-          else if (index < 12) backgroundColor = '#FFC107';
-          else backgroundColor = '#F44336';
+          // Renk paleti: Mavi -> Amber -> Kırmızı (Cyan değil)
+          if (index < 8) backgroundColor = '#4FC3F7'; 
+          else if (index < 12) backgroundColor = '#FFD740'; 
+          else backgroundColor = '#FF5252'; 
         }
         return (
           <View 
@@ -37,8 +37,8 @@ const VolumeVisualizer = ({ metering }: { metering: number }) => {
               styles.vizSegment, 
               { 
                 backgroundColor,
-                height: isActive ? 20 + (index * 2) : 10,
-                opacity: isActive ? 1 : 0.3 
+                height: isActive ? 20 + (index * 2) : 8,
+                opacity: isActive ? 1 : 0.5 
               }
             ]} 
           />
@@ -72,8 +72,6 @@ export default function App() {
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [lyricsLoaded, setLyricsLoaded] = useState(false);
   
-  // ESKİ PREVIEW STATE'LERİ KALDIRILDI (previewSound, isPreviewPlaying vb.)
-
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const resultFadeAnim = useRef(new Animated.Value(0)).current; 
   const resultSlideAnim = useRef(new Animated.Value(50)).current;
@@ -118,7 +116,7 @@ export default function App() {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.2,
+            toValue: 1.1,
             duration: 1000,
             useNativeDriver: true,
           }),
@@ -148,8 +146,6 @@ export default function App() {
       Alert.alert('Warning', 'Could not load lyrics.');
     }
   };
-
-  // ESKİ togglePreview FONKSİYONU KALDIRILDI
 
   const shareFile = async (uri: string | null) => {
     if (!uri) return;
@@ -181,22 +177,23 @@ export default function App() {
   };
 
   const handleGoHome = async () => {
-    // Eski ses durdurma mantığına gerek kalmadı, AudioPlayer'lar unmount olunca kendileri duracak.
     reset();
   };
 
   if (!assets) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#E91E63" />
-        <Text style={{marginTop: 10}}>Loading Assets...</Text>
+        <ActivityIndicator size="large" color="#FFD740" />
+        <Text style={{marginTop: 10, color: 'white'}}>Loading Assets...</Text>
       </View>
     );
   }
 
   return (
     <LinearGradient
-      colors={['#4c669f', '#3b5998', '#192f6a']} 
+      colors={['#0f0c29', '#302b63', '#24243e']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <SafeAreaView style={{flex: 1}}>
@@ -214,7 +211,7 @@ export default function App() {
         <View style={styles.content}>
           {processing ? (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color="#fff" />
+              <ActivityIndicator size="large" color="#FFD740" />
               <Text style={styles.statusText}>Mixing Audio...</Text>
               <Text style={styles.subStatus}>High quality mix in progress...</Text>
             </View>
@@ -225,7 +222,7 @@ export default function App() {
               </View>
               
               <View style={styles.recordingControls}>
-                <Text style={styles.recordingLabel}>RECORDING</Text>
+                <Text style={styles.recordingLabel}>• REC •</Text>
                 
                 <VolumeVisualizer metering={metering} />
 
@@ -242,7 +239,6 @@ export default function App() {
               </View>
             </View>
           ) : mixedFileUri ? (
-            // *** GÜNCELLENEN MIX READY EKRANI ***
             <View style={styles.center}>
               <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 20 }}>
                 <Animated.View style={{ 
@@ -255,11 +251,9 @@ export default function App() {
                   <Text style={{ fontSize: 60, marginBottom: 10 }}>🌟</Text>
                   
                   <Text style={[styles.successTitle, {color: 'white'}]}>Performance Ready!</Text>
-                  <Text style={[styles.successSub, {color: '#ddd'}]}>Listen to your masterpiece:</Text>
+                  <Text style={[styles.successSub, {color: '#B0BEC5'}]}>Listen to your masterpiece:</Text>
                   
-                  {/* --- CARD 1: KARAOKE MIX --- */}
                   <View style={styles.resultCard}>
-                    {/* YENİ AUDIOPLAYER BİLEŞENİ */}
                     <AudioPlayer uri={mixedFileUri} title="Karaoke Mix (Final)" />
                     
                     <View style={styles.actionButtonsRow}>
@@ -281,9 +275,7 @@ export default function App() {
                     </View>
                   </View>
 
-                  {/* --- CARD 2: VOICE ONLY --- */}
                   <View style={styles.resultCard}>
-                     {/* YENİ AUDIOPLAYER BİLEŞENİ (Raw Ses İçin) */}
                     <AudioPlayer uri={voiceFileUri} title="Voice Recording (Raw)" />
 
                     <View style={styles.actionButtonsRow}>
@@ -309,8 +301,8 @@ export default function App() {
                     style={styles.homeButton} 
                     onPress={handleGoHome}
                   >
-                    <Ionicons name="home-outline" size={20} color="#fff" style={styles.btnIcon} />
-                    <Text style={styles.homeButtonText}>Start New Session</Text>
+                    <Ionicons name="refresh-outline" size={20} color="#fff" style={styles.btnIcon} />
+                    <Text style={styles.homeButtonText}>New Session</Text>
                   </TouchableOpacity>
 
                 </Animated.View>
@@ -322,12 +314,12 @@ export default function App() {
                 <Text style={{fontSize: 60}}>🎧</Text>
               </View>
               <Text style={[styles.instructionTitle, {color: 'white'}]}>Ready to Sing?</Text>
-              <Text style={[styles.instruction, {color: '#ddd'}]}>
-                Please use headphones for the best quality and synchronization.
+              <Text style={[styles.instruction, {color: '#B0BEC5'}]}>
+                Use headphones for the best experience.
               </Text>
               <TouchableOpacity style={[styles.button, styles.startButton]} onPress={startSession}>
-                <Ionicons name="mic-outline" size={24} color="#fff" style={{marginRight: 10}} />
-                <Text style={styles.buttonText}>Start Karaoke</Text>
+                <Ionicons name="mic" size={24} color="#0f0c29" style={{marginRight: 10}} />
+                <Text style={[styles.buttonText, { color: '#0f0c29' }]}>Start Karaoke</Text>
               </TouchableOpacity>
               {!lyricsLoaded && <Text style={styles.warning}>Lyrics loading...</Text>}
             </View>
@@ -354,7 +346,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: '#fff',
-    letterSpacing: 1,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 5,
   },
   content: {
     flex: 1,
@@ -370,23 +365,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   recordingControls: {
-    padding: 30,
+    paddingHorizontal: 30,
+    paddingTop: 30,
+    paddingBottom: 60, // <-- STOP Butonu yukarı alındı
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)', 
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 10,
   },
   recordingLabel: {
-    color: '#ff4444',
+    color: '#FF5252',
     fontWeight: 'bold',
-    letterSpacing: 2,
+    letterSpacing: 3,
     marginBottom: 15,
-    fontSize: 12,
+    fontSize: 14,
   },
   vizContainer: {
     flexDirection: 'row',
@@ -413,7 +405,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   startButton: {
-    backgroundColor: '#E91E63',
+    backgroundColor: '#FFD740', // <-- Pastel Amber (Cyan yerine)
     width: '100%',
   },
   stopButton: {
@@ -439,9 +431,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
   successSub: {
     fontSize: 16,
@@ -450,22 +439,18 @@ const styles = StyleSheet.create({
   },
   resultCard: {
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.1)', 
     borderRadius: 24,
     padding: 20,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  // ESKİ cardTitle STİLİ KALDIRILDI (AudioPlayer içinde var)
   actionButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
-    marginTop: 5,
+    marginTop: 10,
   },
   actionBtn: {
     flex: 1,
@@ -474,24 +459,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  // ESKİ playBtn ve playingBtn STİLLERİ KALDIRILDI
   shareBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#5C6BC0',
   },
   downloadBtn: {
-    backgroundColor: '#607D8B',
+    backgroundColor: '#78909C',
   },
   purpleBtn: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#AB47BC',
   },
   darkBtn: {
-    backgroundColor: '#455A64',
+    backgroundColor: '#546E7A',
   },
   actionBtnText: {
     color: '#fff',
@@ -507,10 +486,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingVertical: 15,
     paddingHorizontal: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: 'rgba(255,255,255,0.2)',
     marginBottom: 40,
   },
   homeButtonText: {
@@ -526,18 +505,18 @@ const styles = StyleSheet.create({
   },
   subStatus: {
     marginTop: 8,
-    color: '#ddd',
+    color: '#B0BEC5',
   },
   heroIcon: {
     width: 120,
     height: 120,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   instructionTitle: {
     fontSize: 24,
@@ -552,7 +531,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   warning: {
-    color: '#FF9800',
+    color: '#FFAB91',
     marginTop: 15,
     fontWeight: '500',
   },

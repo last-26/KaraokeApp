@@ -65,7 +65,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     if (isPlaying) {
       await sound.pauseAsync();
     } else {
-      // Şarkı sonundaysa başa sarıp oynat
       if (position >= duration) {
         await sound.setPositionAsync(0);
       }
@@ -97,20 +96,21 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
         <View style={styles.iconContainer}>
             <Ionicons name="musical-note" size={20} color="#fff" />
         </View>
+        {/* BAŞLIK RENGİ BEYAZ YAPILDI */}
         <Text style={styles.title}>{title}</Text>
       </View>
 
       {!isLoaded ? (
-         <ActivityIndicator size="small" color="#E91E63" style={{ marginVertical: 20 }} />
+         <ActivityIndicator size="small" color="#FFD740" style={{ marginVertical: 20 }} />
       ) : (
         <>
           <View style={styles.controlsRow}>
             <TouchableOpacity onPress={handlePlayPause} style={styles.playButton}>
               <Ionicons 
                 name={isPlaying ? "pause" : "play"} 
-                size={28} 
+                size={24} 
                 color="#fff" 
-                style={{ marginLeft: isPlaying ? 0 : 4 }} // Play ikonunu ortalamak için ufak kaydırma
+                style={{ marginLeft: isPlaying ? 0 : 3 }} 
               />
             </TouchableOpacity>
             
@@ -122,11 +122,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
                 value={position}
                 onSlidingStart={() => { isSeeking.current = true; }}
                 onSlidingComplete={handleSeek}
-                minimumTrackTintColor="#E91E63"
-                maximumTrackTintColor="#ccc"
-                thumbTintColor="#E91E63"
+                minimumTrackTintColor="#FFD740" // Pastel Amber (Uyumlu renk)
+                maximumTrackTintColor="rgba(255,255,255,0.3)" // Silik beyaz
+                thumbTintColor="#FFD740"
               />
                <View style={styles.timeRow}>
+                  {/* SÜRE RENGİ AÇIK GRİ YAPILDI */}
                   <Text style={styles.timeText}>{formatTime(position)}</Text>
                   <Text style={styles.timeText}>{formatTime(duration)}</Text>
                </View>
@@ -140,12 +141,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.08)', // Çok hafif şeffaf beyaz zemin
     borderRadius: 16,
     padding: 15,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 36,
     height: 36,
-    backgroundColor: '#E91E63',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
@@ -164,8 +165,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#FFFFFF', // <-- DÜZELTİLDİ: Beyaz renk
     flex: 1,
+    letterSpacing: 0.5,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -174,16 +176,13 @@ const styles = StyleSheet.create({
   playButton: {
     width: 44,
     height: 44,
-    backgroundColor: '#333',
+    backgroundColor: 'rgba(255, 215, 64, 0.2)', // Pastel Amber'ın şeffaf hali
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 64, 0.5)',
   },
   sliderContainer: {
     flex: 1,
@@ -196,10 +195,11 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: -8, // Slider'a yaklaştırmak için
+    marginTop: -5,
   },
   timeText: {
     fontSize: 12,
-    color: '#666',
+    color: '#B0BEC5', // <-- DÜZELTİLDİ: Açık Gri (Okunabilir)
+    fontWeight: '500',
   },
 });

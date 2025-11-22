@@ -7,7 +7,6 @@ interface Props {
   currentTime: number;
 }
 
-// Yanıp sönen nokta animasyonu için ufak bir bileşen
 const PulseIcon = () => {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
@@ -22,7 +21,7 @@ const PulseIcon = () => {
 
   return (
     <Animated.Text style={[styles.instrumentalIcon, { opacity }]}>
-      🎵 Ara Müzik 🎵
+      🎵 Enstrümantal Ara 🎵
     </Animated.Text>
   );
 };
@@ -31,24 +30,19 @@ export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [containerHeight, setContainerHeight] = useState(0);
   
-  // Her satırın Y pozisyonunu ve yüksekliğini saklamak için ref
   const itemsLayout = useRef<{ [key: string]: { y: number; height: number } }>({});
 
-  // Hangi satırın aktif olduğunu bul
   const activeIndex = lyrics.findIndex(
     l => currentTime >= l.startTime && currentTime <= l.endTime
   );
 
-  // Otomatik Kaydırma Efekti
   useEffect(() => {
     if (activeIndex !== -1 && scrollViewRef.current && containerHeight > 0) {
       const activeId = lyrics[activeIndex].id;
       const currentItem = itemsLayout.current[activeId];
       
       if (currentItem) {
-        // Hedef Scroll Noktası = (Satırın Y konumu) + (Satır Yüksekliği / 2) - (Ekran Yüksekliği / 2)
         const scrollToY = currentItem.y + (currentItem.height / 2) - (containerHeight / 2);
-        
         scrollViewRef.current.scrollTo({ 
           y: scrollToY, 
           animated: true 
@@ -69,7 +63,6 @@ export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
           setContainerHeight(e.nativeEvent.layout.height);
         }}
       >
-        {/* Üst kısımdaki boşluk */}
         <View style={{ height: containerHeight / 2 - 40 }} /> 
         
         {lyrics.map((line, index) => {
@@ -98,7 +91,6 @@ export const LyricsDisplay: React.FC<Props> = ({ lyrics, currentTime }) => {
           );
         })}
         
-        {/* Alt kısımdaki boşluk */}
         <View style={{ height: containerHeight / 2 }} /> 
       </ScrollView>
     </View>
@@ -122,42 +114,36 @@ const styles = StyleSheet.create({
     minHeight: 60, 
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24, // Biraz daha ferah aralık
+    marginBottom: 20,
     width: '100%',
   },
-  // PASİF SATIRLAR: Daha yumuşak, mavimsi beyaz
   text: {
     fontSize: 22,
-    color: '#E1F5FE', // Hafif mavimsi beyaz (Pastel)
+    color: 'rgba(255, 255, 255, 0.6)', 
     textAlign: 'center',
     fontWeight: '500',
-    opacity: 0.5, // Biraz daha görünür ama hala pasif
     letterSpacing: 0.5,
   },
-  // AKTİF SATIR: Pastel Amber (Yumuşak Altın)
+  // GÜNCELLENDİ: Altın Sarısı (Gold) Rengi Geri Geldi
   activeText: {
-    fontSize: 30, // Biraz daha büyük
+    fontSize: 28,
     fontWeight: '800',
-    color: '#FFD54F', // Pastel Amber rengi (Gözü yormayan tatlı sarı)
-    opacity: 1,       
-    // Glow Efekti (Daha yumuşak gölge)
-    textShadowColor: 'rgba(255, 213, 79, 0.5)', 
+    color: '#FFD700', // <-- Gold
+    textShadowColor: 'rgba(255, 215, 0, 0.6)', // Hafif altın parlaması
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-    transform: [{ scale: 1.15 }], // Vurguyu artırdık
+    textShadowRadius: 15,
+    transform: [{ scale: 1.1 }], 
   },
-  // ARA MÜZİK: Pastel Teal (Su Yeşili)
   instrumentalIcon: {
-    fontSize: 20,
-    color: '#4DB6AC', // Pastel Teal
+    fontSize: 18,
+    color: '#FFCCBC', 
     fontWeight: 'bold',
-    letterSpacing: 4, // Harf aralığı ile modern görünüm
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   instrumentalText: {
     fontSize: 20,
-    color: '#80CBC4', // Daha soluk teal
-    opacity: 0.3,
+    color: 'rgba(255,255,255,0.3)',
     fontWeight: 'bold',
   }
 });
