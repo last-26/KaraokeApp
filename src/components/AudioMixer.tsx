@@ -93,7 +93,7 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               
               const TARGET_RATE = 22050;
               const TARGET_CHANNELS = 1;
-              const LATENCY_COMPENSATION_SEC = 0.200; 
+              const LATENCY_COMPENSATION_SEC = 0.160; 
 
               const voiceOffset = (voiceBuffer.duration > LATENCY_COMPENSATION_SEC) ? LATENCY_COMPENSATION_SEC : 0;
 
@@ -110,7 +110,7 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               const songSource = offlineCtx.createBufferSource();
               songSource.buffer = songBuffer;
               const songGain = offlineCtx.createGain();
-              songGain.gain.value = 0.5; // Şarkı Sesi
+              songGain.gain.value = 0.7; // Şarkı Sesi
               songSource.connect(songGain);
               songGain.connect(offlineCtx.destination);
 
