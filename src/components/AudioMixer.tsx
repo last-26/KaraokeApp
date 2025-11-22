@@ -36,20 +36,8 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return bytes.buffer;
           }
 
-          function interleave(inputL, inputR) {
-            var length = inputL.length + inputR.length;
-            var result = new Float32Array(length);
-            var index = 0;
-            var inputIndex = 0;
-            while (index < length) {
-              result[index++] = inputL[inputIndex];
-              result[index++] = inputR[inputIndex];
-              inputIndex++;
-            }
-            return result;
-          }
-
-          function encodeWAVOptimized(samples, numChannels, sampleRate) {
+          // Mono WAV Header Yazma (Optimize Edilmiş)
+          function encodeWAVMono(samples, sampleRate) {
             var buffer = new ArrayBuffer(44 + samples.length * 2);
             var view = new DataView(buffer);
 
@@ -58,12 +46,12 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, numChannels, true);
+            view.setUint16(20, 1, true); // PCM Format
+            view.setUint16(22, 1, true); // MONO (1 Kanal) - Boyutu yarıya indirir
             view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * numChannels * 2, true);
-            view.setUint16(32, numChannels * 2, true);
-            view.setUint16(34, 16, true);
+            view.setUint32(28, sampleRate * 2, true); // Byte Rate (SampleRate * NumChannels * 2)
+            view.setUint16(32, 2, true); // Block Align (NumChannels * 2)
+            view.setUint16(34, 16, true); // 16-bit
             writeString(view, 36, 'data');
             view.setUint32(40, samples.length * 2, true);
 
@@ -104,19 +92,27 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               const songBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(songB64));
               const voiceBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(voiceB64));
               
-              const outputLength = Math.max(songBuffer.length, voiceBuffer.length);
+              // HEDEF AYARLAR: 22050 Hz ve Mono
+              // Bu ayarlar dosya boyutunu 44.1k Stereo'ya göre 4 kat küçültür.
+              const TARGET_RATE = 22050;
+              const TARGET_CHANNELS = 1; // Mono
+
+              // Orijinal uzunluk (sample cinsinden) en uzun olana göre belirlenir
+              const maxOriginalLength = Math.max(songBuffer.length, voiceBuffer.length);
               
-              // !!! KRİTİK DEĞİŞİKLİK BURADA !!!
-              // 44100 yerine 22050 yaparak dosya boyutunu yarıya indiriyoruz.
-              // Bu, OOM (Out Of Memory) hatasını engeller.
-              const sampleRate = 22050; 
+              // !!! ÖNEMLİ DÜZELTME !!!
+              // Sample Rate'i düşürdüğümüz için buffer uzunluğunu da orantılı olarak küçültmeliyiz.
+              // Aksi takdirde ses yavaşlar ve dosya boyutu düşmez.
+              const resamplingRatio = TARGET_RATE / songBuffer.sampleRate;
+              const outputLength = Math.floor(maxOriginalLength * resamplingRatio);
 
               const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
-                2, 
+                TARGET_CHANNELS, 
                 outputLength,
-                sampleRate
+                TARGET_RATE
               );
 
+              // Şarkı Kaynağı
               const songSource = offlineCtx.createBufferSource();
               songSource.buffer = songBuffer;
               const songGain = offlineCtx.createGain();
@@ -124,6 +120,7 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               songSource.connect(songGain);
               songGain.connect(offlineCtx.destination);
 
+              // Ses Kaynağı
               const voiceSource = offlineCtx.createBufferSource();
               voiceSource.buffer = voiceBuffer;
               const voiceGain = offlineCtx.createGain();
@@ -136,15 +133,15 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
 
               const renderedBuffer = await offlineCtx.startRendering();
 
-              // Resample edilmiş buffer'ı işle
-              const interleavedData = interleave(renderedBuffer.getChannelData(0), renderedBuffer.getChannelData(1));
+              // Mono olduğu için sadece 0. kanalı alıyoruz (Interleave gerekmez)
+              const monoData = renderedBuffer.getChannelData(0);
               
-              // Encoding sırasında yeni sampleRate (22050) kullanılıyor
-              const wavBuffer = encodeWAVOptimized(interleavedData, 2, sampleRate);
+              // Encoding
+              const wavBuffer = encodeWAVMono(monoData, TARGET_RATE);
               
               const blob = new Blob([wavBuffer], { type: 'audio/wav' });
               
-              // Bellek temizliği için yardımcı (Opsiyonel, tarayıcıya ipucu verir)
+              // Bellek temizliği
               if (window.gc) window.gc();
 
               const finalBase64 = await blobToBase64(blob);
