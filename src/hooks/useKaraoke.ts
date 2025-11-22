@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
-// SDK 54 Uyarısı için düzeltme: 'legacy' import kullanıyoruz
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
@@ -33,16 +32,19 @@ export const useKaraoke = () => {
     metering: -160,
   });
 
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  // Referanslar (Otomatik durdurma için kritik)
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  
   const [permissionResponse, requestPermission] = Audio.usePermissions();
 
+  // Cleanup
   useEffect(() => {
     return () => {
-      if (sound) sound.unloadAsync();
-      if (recording) recording.stopAndUnloadAsync();
+      if (soundRef.current) soundRef.current.unloadAsync();
+      if (recordingRef.current) recordingRef.current.stopAndUnloadAsync();
     };
-  }, [sound, recording]);
+  }, []);
 
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
@@ -53,6 +55,7 @@ export const useKaraoke = () => {
         isPlaying: status.isPlaying,
       }));
 
+      // Şarkı bittiğinde kaydı da bitir
       if (status.didJustFinish) {
         stopSession();
       }
@@ -91,27 +94,39 @@ export const useKaraoke = () => {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        playThroughEarpieceAndroid: false,
+        playThroughEarpieceAndroid: false, 
+        shouldDuckAndroid: true,
       });
 
-      // Prepare Recording with Metering Enabled
-      const newRecording = new Audio.Recording();
-      await newRecording.prepareToRecordAsync({
+      const recordingOptions: Audio.RecordingOptions = {
         ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
         isMeteringEnabled: true,
-      });
+        android: {
+          ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
+          audioSource: 7, // VOICE_COMMUNICATION (AEC)
+        },
+        ios: {
+          ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
+          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+        }
+      };
+
+      const newRecording = new Audio.Recording();
+      await newRecording.prepareToRecordAsync(recordingOptions);
       newRecording.setOnRecordingStatusUpdate(onRecordingStatusUpdate);
 
-      // Prepare Sound
       const { sound: newSound } = await Audio.Sound.createAsync(
         require('../../assets/song.mp3'),
         { shouldPlay: false }
       );
       newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
-      // Start
-      setRecording(newRecording);
-      setSound(newSound);
+      // Kayıt sırasında yankıyı engellemek için müzik sesi %50
+      await newSound.setVolumeAsync(0.5); 
+
+      // Referanslara ata
+      recordingRef.current = newRecording;
+      soundRef.current = newSound;
       
       await newRecording.startAsync();
       await newSound.playAsync();
@@ -125,22 +140,23 @@ export const useKaraoke = () => {
   };
 
   const stopSession = async () => {
-    if (!sound && !recording) return;
+    // Referansları kontrol et
+    if (!soundRef.current && !recordingRef.current) return;
 
     try {
       setState(prev => ({ ...prev, isPlaying: false, isRecording: false, processing: true, metering: -160 }));
 
       let voiceUri = '';
-      if (recording) {
-        await recording.stopAndUnloadAsync();
-        voiceUri = recording.getURI() || '';
-        setRecording(null);
+      if (recordingRef.current) {
+        await recordingRef.current.stopAndUnloadAsync();
+        voiceUri = recordingRef.current.getURI() || '';
+        recordingRef.current = null; // Ref'i temizle
       }
 
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
+      if (soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null; // Ref'i temizle
       }
 
       if (voiceUri) {
@@ -158,7 +174,6 @@ export const useKaraoke = () => {
 
   const prepareForMixing = async (voiceUri: string) => {
     try {
-      // 1. Load Song Base64
       const songAsset = Asset.fromModule(require('../../assets/song.mp3'));
       await songAsset.downloadAsync();
       const songUri = songAsset.localUri || songAsset.uri;
@@ -203,7 +218,6 @@ export const useKaraoke = () => {
       console.log("Mix completed, saving file...");
       const outputUri = FileSystem.documentDirectory + 'karaoke_mix.wav';
       
-      // Legacy import kullandığımız için bu fonksiyon sorunsuz çalışmalı
       await FileSystem.writeAsStringAsync(outputUri, mixedBase64, { encoding: 'base64' });
       
       console.log("File saved to:", outputUri);

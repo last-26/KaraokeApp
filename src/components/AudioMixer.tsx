@@ -36,7 +36,6 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return bytes.buffer;
           }
 
-          // Mono WAV Header Yazma (Optimize Edilmiş)
           function encodeWAVMono(samples, sampleRate) {
             var buffer = new ArrayBuffer(44 + samples.length * 2);
             var view = new DataView(buffer);
@@ -46,12 +45,12 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true); // PCM Format
-            view.setUint16(22, 1, true); // MONO (1 Kanal) - Boyutu yarıya indirir
+            view.setUint16(20, 1, true); 
+            view.setUint16(22, 1, true); 
             view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true); // Byte Rate (SampleRate * NumChannels * 2)
-            view.setUint16(32, 2, true); // Block Align (NumChannels * 2)
-            view.setUint16(34, 16, true); // 16-bit
+            view.setUint32(28, sampleRate * 2, true); 
+            view.setUint16(32, 2, true); 
+            view.setUint16(34, 16, true); 
             writeString(view, 36, 'data');
             view.setUint32(40, samples.length * 2, true);
 
@@ -92,18 +91,14 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               const songBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(songB64));
               const voiceBuffer = await audioCtx.decodeAudioData(base64ToArrayBuffer(voiceB64));
               
-              // HEDEF AYARLAR: 22050 Hz ve Mono
-              // Bu ayarlar dosya boyutunu 44.1k Stereo'ya göre 4 kat küçültür.
               const TARGET_RATE = 22050;
-              const TARGET_CHANNELS = 1; // Mono
+              const TARGET_CHANNELS = 1;
+              const LATENCY_COMPENSATION_SEC = 0.200; 
 
-              // Orijinal uzunluk (sample cinsinden) en uzun olana göre belirlenir
-              const maxOriginalLength = Math.max(songBuffer.length, voiceBuffer.length);
-              
-              // !!! ÖNEMLİ DÜZELTME !!!
-              // Sample Rate'i düşürdüğümüz için buffer uzunluğunu da orantılı olarak küçültmeliyiz.
-              // Aksi takdirde ses yavaşlar ve dosya boyutu düşmez.
+              const voiceOffset = (voiceBuffer.duration > LATENCY_COMPENSATION_SEC) ? LATENCY_COMPENSATION_SEC : 0;
+
               const resamplingRatio = TARGET_RATE / songBuffer.sampleRate;
+              const maxOriginalLength = Math.max(songBuffer.length, voiceBuffer.length);
               const outputLength = Math.floor(maxOriginalLength * resamplingRatio);
 
               const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
@@ -112,36 +107,31 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
                 TARGET_RATE
               );
 
-              // Şarkı Kaynağı
               const songSource = offlineCtx.createBufferSource();
               songSource.buffer = songBuffer;
               const songGain = offlineCtx.createGain();
-              songGain.gain.value = 0.7;
+              songGain.gain.value = 0.5; // Şarkı Sesi
               songSource.connect(songGain);
               songGain.connect(offlineCtx.destination);
 
-              // Ses Kaynağı
               const voiceSource = offlineCtx.createBufferSource();
               voiceSource.buffer = voiceBuffer;
               const voiceGain = offlineCtx.createGain();
-              voiceGain.gain.value = 1.5;
+              // !!! GÜNCELLEME: Ses seviyesini 3.0'a çıkardık (daha gür ses) !!!
+              voiceGain.gain.value = 3.0; 
+              
               voiceSource.connect(voiceGain);
               voiceGain.connect(offlineCtx.destination);
 
               songSource.start(0);
-              voiceSource.start(0);
+              voiceSource.start(0, voiceOffset);
 
               const renderedBuffer = await offlineCtx.startRendering();
 
-              // Mono olduğu için sadece 0. kanalı alıyoruz (Interleave gerekmez)
               const monoData = renderedBuffer.getChannelData(0);
-              
-              // Encoding
               const wavBuffer = encodeWAVMono(monoData, TARGET_RATE);
-              
               const blob = new Blob([wavBuffer], { type: 'audio/wav' });
               
-              // Bellek temizliği
               if (window.gc) window.gc();
 
               const finalBase64 = await blobToBase64(blob);

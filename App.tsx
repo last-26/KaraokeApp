@@ -1,39 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, SafeAreaView, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, SafeAreaView, Alert, Platform } from 'react-native';
 import { Asset, useAssets } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
+
+// Android'de dosya kaydetmek için gerekli
+const { StorageAccessFramework } = FileSystem;
 
 import { useKaraoke } from './src/hooks/useKaraoke';
 import { parseSRT, LyricLine } from './src/utils/srtParser';
 import { LyricsDisplay } from './src/components/LyricsDisplay';
 import { AudioMixer } from './src/components/AudioMixer';
 
-// Modern Segmentli Ses Göstergesi Bileşeni
 const VolumeVisualizer = ({ metering }: { metering: number }) => {
-  // Metering genelde -160 (sessiz) ile 0 (maks) arasındadır.
-  // Bunu 0-100 arasına normalize ediyoruz.
-  // -60db altını sessiz kabul edip filtreliyoruz.
   const normalizedLevel = Math.min(100, Math.max(0, (metering + 60) * (100 / 60)));
-  
-  // 10 adet segment oluşturuyoruz
   const segments = Array.from({ length: 15 });
 
   return (
     <View style={styles.vizContainer}>
       {segments.map((_, index) => {
-        // Her segmentin temsil ettiği eşik değeri
         const threshold = (index + 1) * (100 / segments.length);
         const isActive = normalizedLevel >= threshold;
-        
-        // Renk skalası (Yeşil -> Sarı -> Kırmızı)
-        let backgroundColor = '#e0e0e0'; // Pasif renk
+        let backgroundColor = '#e0e0e0';
         if (isActive) {
-          if (index < 8) backgroundColor = '#4CAF50'; // Yeşil
-          else if (index < 12) backgroundColor = '#FFC107'; // Sarı
-          else backgroundColor = '#F44336'; // Kırmızı
+          if (index < 8) backgroundColor = '#4CAF50';
+          else if (index < 12) backgroundColor = '#FFC107';
+          else backgroundColor = '#F44336';
         }
-
         return (
           <View 
             key={index} 
@@ -41,7 +35,7 @@ const VolumeVisualizer = ({ metering }: { metering: number }) => {
               styles.vizSegment, 
               { 
                 backgroundColor,
-                height: isActive ? 20 + (index * 2) : 10, // Aktifse biraz büyüsün
+                height: isActive ? 20 + (index * 2) : 10,
                 opacity: isActive ? 1 : 0.3 
               }
             ]} 
@@ -75,7 +69,6 @@ export default function App() {
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [lyricsLoaded, setLyricsLoaded] = useState(false);
   
-  // Preview Player State
   const [previewSound, setPreviewSound] = useState<Audio.Sound | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
@@ -111,12 +104,10 @@ export default function App() {
     }
   };
 
-  // Play/Pause Toggle Mantığı
   const togglePreview = async () => {
     if (!mixedFileUri) return;
 
     try {
-      // Eğer ses zaten yüklü ise
       if (previewSound) {
         const status = await previewSound.getStatusAsync();
         if (status.isLoaded) {
@@ -124,7 +115,6 @@ export default function App() {
             await previewSound.pauseAsync();
             setIsPreviewPlaying(false);
           } else {
-            // Eğer şarkı bitmişse başa sar
             if (status.positionMillis >= (status.durationMillis || 0)) {
               await previewSound.replayAsync();
             } else {
@@ -136,7 +126,6 @@ export default function App() {
         }
       }
 
-      // Ses yüklü değilse yeni oluştur
       const { sound } = await Audio.Sound.createAsync(
         { uri: mixedFileUri },
         { shouldPlay: true }
@@ -146,7 +135,7 @@ export default function App() {
         if (status.isLoaded) {
           if (status.didJustFinish) {
             setIsPreviewPlaying(false);
-            sound.setPositionAsync(0); // Başa sar
+            sound.setPositionAsync(0);
           } else {
             setIsPreviewPlaying(status.isPlaying);
           }
@@ -164,13 +153,47 @@ export default function App() {
   const handleShare = async () => {
     if (!mixedFileUri) return;
     if (!(await Sharing.isAvailableAsync())) {
-      Alert.alert('Error', 'Sharing is not available on this platform');
+      Alert.alert('Error', 'Sharing is not available');
       return;
     }
     await Sharing.shareAsync(mixedFileUri);
   };
 
-  // Yeni kayıt başlatırken eski player'ı temizle
+  // DOWNLOAD FONKSİYONU
+  const handleDownload = async () => {
+    if (!mixedFileUri) return;
+
+    try {
+      if (Platform.OS === 'android') {
+        // Android için Klasör İzni İste ve Kaydet
+        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const directoryUri = permissions.directoryUri;
+          
+          // Dosyayı oku
+          const fileContent = await FileSystem.readAsStringAsync(mixedFileUri, { encoding: FileSystem.EncodingType.Base64 });
+          
+          // Yeni dosya oluştur
+          const newFileUri = await StorageAccessFramework.createFileAsync(
+            directoryUri,
+            'karaoke_mix.wav',
+            'audio/wav'
+          );
+          
+          // Yaz
+          await FileSystem.writeAsStringAsync(newFileUri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
+          
+          Alert.alert('Success', 'File saved to your device!');
+        }
+      } else {
+        // iOS'te Share menüsünde "Save to Files" zaten var
+        await Sharing.shareAsync(mixedFileUri);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', 'Download failed: ' + e.message);
+    }
+  };
+
   const handleNewRecording = async () => {
     if (previewSound) {
       await previewSound.unloadAsync();
@@ -218,7 +241,6 @@ export default function App() {
             <View style={styles.recordingControls}>
               <Text style={styles.recordingLabel}>RECORDING</Text>
               
-              {/* Yeni Dinamik Visualizer */}
               <VolumeVisualizer metering={metering} />
 
               <TouchableOpacity style={[styles.button, styles.stopButton]} onPress={stopSession}>
@@ -239,12 +261,18 @@ export default function App() {
                   onPress={togglePreview}
                 >
                   <Text style={styles.actionBtnText}>
-                    {isPreviewPlaying ? "⏸ Stop" : "▶ Play Mix"}
+                    {isPreviewPlaying ? "⏸ Stop" : "▶ Play"}
                   </Text>
                 </TouchableOpacity>
-
+              </View>
+              
+              <View style={[styles.row, { marginTop: 10 }]}>
                 <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShare}>
                   <Text style={styles.actionBtnText}>📤 Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.actionBtn, styles.downloadBtn]} onPress={handleDownload}>
+                  <Text style={styles.actionBtnText}>⬇️ Download</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -317,7 +345,7 @@ const styles = StyleSheet.create({
   recordingControls: {
     padding: 30,
     alignItems: 'center',
-    backgroundColor: '#222', // Koyu tema kayıt alanı
+    backgroundColor: '#222',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     shadowColor: '#000',
@@ -333,8 +361,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 12,
   },
-  
-  // Visualizer Styles
   vizContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -346,7 +372,6 @@ const styles = StyleSheet.create({
     width: 8,
     borderRadius: 4,
   },
-
   button: {
     flexDirection: 'row',
     paddingHorizontal: 40,
@@ -365,7 +390,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   stopButton: {
-    backgroundColor: '#fff', // Stop butonu beyaz olsun
+    backgroundColor: '#fff',
     width: '100%',
   },
   stopIcon: {
@@ -380,12 +405,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // Stop butonu içindeki yazı rengi için override
   stopButtonText: {
     color: '#D32F2F', 
   },
-  
-  // Result Screen Styles
   successTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -430,24 +452,24 @@ const styles = StyleSheet.create({
   shareBtn: {
     backgroundColor: '#2196F3',
   },
+  downloadBtn: {
+    backgroundColor: '#607D8B', // Gri/Mavi ton
+  },
   actionBtnText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  
   secondaryButton: {
     paddingVertical: 15,
     width: '100%',
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#666', // Artık görünür renk
+    color: '#666',
     fontSize: 16,
     fontWeight: '600',
   },
-
-  // Status Styles
   statusText: {
     marginTop: 20,
     fontSize: 20,
@@ -458,8 +480,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#888',
   },
-  
-  // Hero / Start Styles
   heroIcon: {
     width: 120,
     height: 120,
