@@ -35,7 +35,7 @@ export const useKaraoke = () => {
   // Referanslar (Otomatik durdurma için kritik)
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
-  
+
   const [permissionResponse, requestPermission] = Audio.usePermissions();
 
   // Cleanup
@@ -73,11 +73,11 @@ export const useKaraoke = () => {
 
   const startSession = async () => {
     try {
-      setState(prev => ({ 
-        ...prev, 
-        error: null, 
-        mixedFileUri: null, 
-        voiceFileUri: null, 
+      setState(prev => ({
+        ...prev,
+        error: null,
+        mixedFileUri: null,
+        voiceFileUri: null,
         processing: false,
         metering: -160
       }));
@@ -94,7 +94,7 @@ export const useKaraoke = () => {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        playThroughEarpieceAndroid: false, 
+        playThroughEarpieceAndroid: false,
         shouldDuckAndroid: true,
       });
 
@@ -103,11 +103,12 @@ export const useKaraoke = () => {
         isMeteringEnabled: true,
         android: {
           ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
+          // @ts-ignore: audioSource is not in the type definition but required for AEC
           audioSource: 7, // VOICE_COMMUNICATION (AEC)
         },
         ios: {
           ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
         }
       };
 
@@ -122,12 +123,12 @@ export const useKaraoke = () => {
       newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
       // Kayıt sırasında yankıyı engellemek için müzik sesi %50
-      await newSound.setVolumeAsync(0.5); 
+      await newSound.setVolumeAsync(0.5);
 
       // Referanslara ata
       recordingRef.current = newRecording;
       soundRef.current = newSound;
-      
+
       await newRecording.startAsync();
       await newSound.playAsync();
 
@@ -211,7 +212,7 @@ export const useKaraoke = () => {
       const songUri = songAsset.localUri || songAsset.uri;
 
       if (!songUri) throw new Error('Could not load song asset');
-      
+
       const songResponse = await fetch(songUri);
       const songBlob = await songResponse.blob();
       const songB64 = await blobToBase64(songBlob);
@@ -220,11 +221,11 @@ export const useKaraoke = () => {
       const voiceBlob = await voiceResponse.blob();
       const voiceB64 = await blobToBase64(voiceBlob);
 
-      setState(prev => ({ 
-        ...prev, 
-        songBase64: songB64, 
+      setState(prev => ({
+        ...prev,
+        songBase64: songB64,
         voiceBase64: voiceB64,
-        processing: true 
+        processing: true
       }));
 
     } catch (err: any) {
@@ -238,7 +239,7 @@ export const useKaraoke = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64data = reader.result as string;
-        resolve(base64data.split(',')[1]); 
+        resolve(base64data.split(',')[1]);
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
@@ -249,14 +250,14 @@ export const useKaraoke = () => {
     try {
       console.log("Mix completed, saving file...");
       const outputUri = FileSystem.documentDirectory + 'karaoke_mix.wav';
-      
+
       await FileSystem.writeAsStringAsync(outputUri, mixedBase64, { encoding: 'base64' });
-      
+
       console.log("File saved to:", outputUri);
 
-      setState(prev => ({ 
-        ...prev, 
-        mixedFileUri: outputUri, 
+      setState(prev => ({
+        ...prev,
+        mixedFileUri: outputUri,
         processing: false,
         songBase64: null,
         voiceBase64: null
