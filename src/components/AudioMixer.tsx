@@ -2,6 +2,9 @@ import React, { useRef, useEffect } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+/**
+ * Props for the AudioMixer component.
+ */
 interface Props {
   songBase64: string | null;
   voiceBase64: string | null;
@@ -9,9 +12,19 @@ interface Props {
   onError: (error: string) => void;
 }
 
+/**
+ * A hidden component that uses a WebView to mix audio tracks using the Web Audio API.
+ * This is necessary because React Native's native audio libraries often lack advanced mixing capabilities like offline rendering.
+ * 
+ * @param songBase64 Base64 string of the backing track
+ * @param voiceBase64 Base64 string of the recorded voice
+ * @param onMixComplete Callback function when mixing is finished
+ * @param onError Callback function when an error occurs
+ */
 export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComplete, onError }) => {
   const webviewRef = useRef<WebView>(null);
 
+  // Trigger mixing when both audio sources are available
   useEffect(() => {
     if (songBase64 && voiceBase64) {
       setTimeout(() => {
@@ -26,6 +39,9 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
     <html>
       <body>
         <script>
+          /**
+           * Converts a Base64 string to an ArrayBuffer.
+           */
           function base64ToArrayBuffer(base64) {
             var binary_string = window.atob(base64);
             var len = binary_string.length;
@@ -36,6 +52,9 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return bytes.buffer;
           }
 
+          /**
+           * Encodes raw audio samples into a WAV file format (Mono).
+           */
           function encodeWAVMono(samples, sampleRate) {
             var buffer = new ArrayBuffer(44 + samples.length * 2);
             var view = new DataView(buffer);
@@ -59,6 +78,9 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             return buffer;
           }
 
+          /**
+           * Converts float samples to 16-bit PCM.
+           */
           function floatTo16BitPCM(output, offset, input) {
             for (var i = 0; i < input.length; i++, offset += 2) {
               var s = Math.max(-1, Math.min(1, input[i]));
@@ -66,12 +88,18 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             }
           }
 
+          /**
+           * Writes a string to a DataView at a specific offset.
+           */
           function writeString(view, offset, string) {
             for (var i = 0; i < string.length; i++) {
               view.setUint8(offset + i, string.charCodeAt(i));
             }
           }
 
+          /**
+           * Converts a Blob object to a Base64 string.
+           */
           function blobToBase64(blob) {
             return new Promise((resolve, reject) => {
               const reader = new FileReader();
@@ -84,6 +112,10 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
             });
           }
 
+          /**
+           * Main mixing function exposed to React Native.
+           * Decodes audio, mixes them with latency compensation, and renders to WAV.
+           */
           window.mixAudio = async function(songB64, voiceB64) {
             try {
               const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -93,7 +125,7 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
               
               const TARGET_RATE = 22050;
               const TARGET_CHANNELS = 1;
-              const LATENCY_COMPENSATION_SEC = 0.160; 
+              const LATENCY_COMPENSATION_SEC = 0.160; // Latency compensation for specific device
 
               const voiceOffset = (voiceBuffer.duration > LATENCY_COMPENSATION_SEC) ? LATENCY_COMPENSATION_SEC : 0;
 
@@ -107,25 +139,29 @@ export const AudioMixer: React.FC<Props> = ({ songBase64, voiceBase64, onMixComp
                 TARGET_RATE
               );
 
+              // Setup Song Source
               const songSource = offlineCtx.createBufferSource();
               songSource.buffer = songBuffer;
               const songGain = offlineCtx.createGain();
-              songGain.gain.value = 0.7; // Şarkı Sesi
+              songGain.gain.value = 0.7; // Song Volume
               songSource.connect(songGain);
               songGain.connect(offlineCtx.destination);
 
+              // Setup Voice Source
               const voiceSource = offlineCtx.createBufferSource();
               voiceSource.buffer = voiceBuffer;
               const voiceGain = offlineCtx.createGain();
-              // !!! GÜNCELLEME: Ses seviyesini 3.0'a çıkardık (daha gür ses) !!!
+              // !!! UPDATE: Increased volume to 3.0 (louder voice) !!!
               voiceGain.gain.value = 3.0; 
               
               voiceSource.connect(voiceGain);
               voiceGain.connect(offlineCtx.destination);
 
+              // Schedule playback
               songSource.start(0);
               voiceSource.start(0, voiceOffset);
 
+              // Render
               const renderedBuffer = await offlineCtx.startRendering();
 
               const monoData = renderedBuffer.getChannelData(0);

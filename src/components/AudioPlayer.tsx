@@ -4,11 +4,20 @@ import { Audio, AVPlaybackStatus } from 'expo-av';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 
+/**
+ * Props for the AudioPlayer component.
+ */
 interface AudioPlayerProps {
   uri: string | null;
   title: string;
 }
 
+/**
+ * A reusable audio player component with play/pause, seek, and progress tracking.
+ * 
+ * @param uri The URI of the audio file to play
+ * @param title The title of the audio track
+ */
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -26,6 +35,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     };
   }, [uri]);
 
+  /**
+   * Loads the audio sound from the provided URI.
+   */
   const loadSound = async () => {
     if (!uri) return;
     setIsLoaded(false);
@@ -34,12 +46,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
         { uri },
         { shouldPlay: false }
       );
-      
+
       if (status.isLoaded) {
         setSound(newSound);
         setDuration(status.durationMillis || 0);
         setIsLoaded(true);
-        
+
         newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
       }
     } catch (error) {
@@ -47,6 +59,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     }
   };
 
+  /**
+   * Updates the player state based on playback status updates.
+   */
   const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
       if (!isSeeking.current) {
@@ -60,6 +75,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     }
   };
 
+  /**
+   * Toggles between play and pause states.
+   * Restarts from the beginning if the track has finished.
+   */
   const handlePlayPause = async () => {
     if (!sound) return;
     if (isPlaying) {
@@ -72,6 +91,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     }
   };
 
+  /**
+   * Handles seeking to a specific position in the track.
+   */
   const handleSeek = async (value: number) => {
     if (sound) {
       await sound.setPositionAsync(value);
@@ -80,6 +102,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     isSeeking.current = false;
   };
 
+  /**
+   * Formats milliseconds into MM:SS string.
+   */
   const formatTime = (millis: number) => {
     if (!millis || millis < 0) return '0:00';
     const totalSeconds = millis / 1000;
@@ -94,26 +119,26 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.iconContainer}>
-            <Ionicons name="musical-note" size={20} color="#fff" />
+          <Ionicons name="musical-note" size={20} color="#fff" />
         </View>
-        {/* BAŞLIK RENGİ BEYAZ YAPILDI */}
+        {/* Title color set to white */}
         <Text style={styles.title}>{title}</Text>
       </View>
 
       {!isLoaded ? (
-         <ActivityIndicator size="small" color="#FFD740" style={{ marginVertical: 20 }} />
+        <ActivityIndicator size="small" color="#FFD740" style={{ marginVertical: 20 }} />
       ) : (
         <>
           <View style={styles.controlsRow}>
             <TouchableOpacity onPress={handlePlayPause} style={styles.playButton}>
-              <Ionicons 
-                name={isPlaying ? "pause" : "play"} 
-                size={24} 
-                color="#fff" 
-                style={{ marginLeft: isPlaying ? 0 : 3 }} 
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={24}
+                color="#fff"
+                style={{ marginLeft: isPlaying ? 0 : 3 }}
               />
             </TouchableOpacity>
-            
+
             <View style={styles.sliderContainer}>
               <Slider
                 style={styles.slider}
@@ -122,15 +147,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
                 value={position}
                 onSlidingStart={() => { isSeeking.current = true; }}
                 onSlidingComplete={handleSeek}
-                minimumTrackTintColor="#FFD740" // Pastel Amber (Uyumlu renk)
-                maximumTrackTintColor="rgba(255,255,255,0.3)" // Silik beyaz
+                minimumTrackTintColor="#FFD740" // Pastel Amber (Matching theme)
+                maximumTrackTintColor="rgba(255,255,255,0.3)" // Faded white
                 thumbTintColor="#FFD740"
               />
-               <View style={styles.timeRow}>
-                  {/* SÜRE RENGİ AÇIK GRİ YAPILDI */}
-                  <Text style={styles.timeText}>{formatTime(position)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
-               </View>
+              <View style={styles.timeRow}>
+                {/* Duration color set to light gray */}
+                <Text style={styles.timeText}>{formatTime(position)}</Text>
+                <Text style={styles.timeText}>{formatTime(duration)}</Text>
+              </View>
             </View>
           </View>
         </>
@@ -141,7 +166,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, title }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.08)', // Çok hafif şeffaf beyaz zemin
+    backgroundColor: 'rgba(255,255,255,0.08)', // Very light transparent white background
     borderRadius: 16,
     padding: 15,
     marginBottom: 15,
@@ -165,7 +190,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF', // <-- DÜZELTİLDİ: Beyaz renk
+    color: '#FFFFFF', // White color
     flex: 1,
     letterSpacing: 0.5,
   },
@@ -176,7 +201,7 @@ const styles = StyleSheet.create({
   playButton: {
     width: 44,
     height: 44,
-    backgroundColor: 'rgba(255, 215, 64, 0.2)', // Pastel Amber'ın şeffaf hali
+    backgroundColor: 'rgba(255, 215, 64, 0.2)', // Transparent Pastel Amber
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
@@ -199,7 +224,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#B0BEC5', // <-- DÜZELTİLDİ: Açık Gri (Okunabilir)
+    color: '#B0BEC5', // Light Gray (Readable)
     fontWeight: '500',
   },
 });

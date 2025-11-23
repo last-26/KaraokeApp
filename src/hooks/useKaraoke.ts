@@ -3,6 +3,9 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
+/**
+ * State interface for the Karaoke session.
+ */
 export interface KaraokeState {
   isRecording: boolean;
   isPlaying: boolean;
@@ -17,6 +20,12 @@ export interface KaraokeState {
   metering: number;
 }
 
+/**
+ * Custom hook to manage the Karaoke session logic.
+ * Handles audio recording, playback, synchronization, and mixing preparation.
+ * 
+ * @returns Karaoke state and control functions
+ */
 export const useKaraoke = () => {
   const [state, setState] = useState<KaraokeState>({
     isRecording: false,
@@ -32,13 +41,13 @@ export const useKaraoke = () => {
     metering: -160,
   });
 
-  // Referanslar (Otomatik durdurma için kritik)
+  // References (Critical for automatic stopping and cleanup)
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   const [permissionResponse, requestPermission] = Audio.usePermissions();
 
-  // Cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync();
@@ -46,6 +55,10 @@ export const useKaraoke = () => {
     };
   }, []);
 
+  /**
+   * Updates state based on playback status.
+   * Automatically stops the session when the song finishes.
+   */
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
       setState(prev => ({
@@ -55,13 +68,16 @@ export const useKaraoke = () => {
         isPlaying: status.isPlaying,
       }));
 
-      // Şarkı bittiğinde kaydı da bitir
+      // Stop recording when the song finishes
       if (status.didJustFinish) {
         stopSession();
       }
     }
   };
 
+  /**
+   * Updates state based on recording status (e.g., metering levels).
+   */
   const onRecordingStatusUpdate = (status: Audio.RecordingStatus) => {
     if (status.isRecording) {
       setState(prev => ({
@@ -71,6 +87,14 @@ export const useKaraoke = () => {
     }
   };
 
+  /**
+   * Starts the karaoke session:
+   * 1. Resets state
+   * 2. Checks permissions
+   * 3. Configures audio mode
+   * 4. Prepares recording and sound
+   * 5. Starts both simultaneously
+   */
   const startSession = async () => {
     try {
       setState(prev => ({
@@ -122,10 +146,10 @@ export const useKaraoke = () => {
       );
       newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
-      // Kayıt sırasında yankıyı engellemek için müzik sesi %50
+      // Set music volume to 50% to reduce echo pickup
       await newSound.setVolumeAsync(0.5);
 
-      // Referanslara ata
+      // Assign to refs
       recordingRef.current = newRecording;
       soundRef.current = newSound;
 
@@ -140,8 +164,11 @@ export const useKaraoke = () => {
     }
   };
 
+  /**
+   * Stops the current session, unloads audio resources, and prepares for mixing.
+   */
   const stopSession = async () => {
-    // Referansları kontrol et
+    // Check refs
     if (!soundRef.current && !recordingRef.current) return;
 
     try {
@@ -151,13 +178,13 @@ export const useKaraoke = () => {
       if (recordingRef.current) {
         await recordingRef.current.stopAndUnloadAsync();
         voiceUri = recordingRef.current.getURI() || '';
-        recordingRef.current = null; // Ref'i temizle
+        recordingRef.current = null; // Clear ref
       }
 
       if (soundRef.current) {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
-        soundRef.current = null; // Ref'i temizle
+        soundRef.current = null; // Clear ref
       }
 
       if (voiceUri) {
@@ -173,10 +200,13 @@ export const useKaraoke = () => {
     }
   };
 
-  // YENİ EKLENEN RESET FONKSİYONU
+  /**
+   * Resets the karaoke state and unloads any active audio.
+   * Useful for restarting the session completely.
+   */
   const reset = async () => {
     try {
-      // Eğer çalan bir şeyler varsa durdur ve temizle
+      // Stop and unload if anything is playing
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
@@ -186,7 +216,7 @@ export const useKaraoke = () => {
         recordingRef.current = null;
       }
 
-      // State'i başlangıç haline getir
+      // Reset state to initial values
       setState({
         isRecording: false,
         isPlaying: false,
@@ -205,6 +235,11 @@ export const useKaraoke = () => {
     }
   };
 
+  /**
+   * Prepares audio files for mixing by converting them to Base64.
+   * 
+   * @param voiceUri URI of the recorded voice file
+   */
   const prepareForMixing = async (voiceUri: string) => {
     try {
       const songAsset = Asset.fromModule(require('../../assets/song.mp3'));
@@ -234,6 +269,9 @@ export const useKaraoke = () => {
     }
   };
 
+  /**
+   * Helper to convert a Blob to a Base64 string.
+   */
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -246,6 +284,10 @@ export const useKaraoke = () => {
     });
   };
 
+  /**
+   * Callback for when the mixing process is complete.
+   * Saves the mixed file to the document directory.
+   */
   const handleMixComplete = async (mixedBase64: string) => {
     try {
       console.log("Mix completed, saving file...");
@@ -268,6 +310,9 @@ export const useKaraoke = () => {
     }
   };
 
+  /**
+   * Callback for mixing errors.
+   */
   const handleMixError = (msg: string) => {
     console.error("Mixer error from WebView:", msg);
     setState(prev => ({ ...prev, error: 'Mixer error: ' + msg, processing: false }));
@@ -277,7 +322,7 @@ export const useKaraoke = () => {
     ...state,
     startSession,
     stopSession,
-    reset, // <-- Reset'i dışarıya açtık
+    reset,
     handleMixComplete,
     handleMixError,
     requestPermission

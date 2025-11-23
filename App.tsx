@@ -4,7 +4,7 @@ import { Asset, useAssets } from 'expo-asset';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
 
 const { StorageAccessFramework } = FileSystem;
 
@@ -14,6 +14,10 @@ import { LyricsDisplay } from './src/components/LyricsDisplay';
 import { AudioMixer } from './src/components/AudioMixer';
 import { AudioPlayer } from './src/components/AudioPlayer';
 
+/**
+ * Visualizes the audio metering level using a segmented bar.
+ * Changes color based on intensity (Blue -> Amber -> Red).
+ */
 const VolumeVisualizer = ({ metering }: { metering: number }) => {
   const normalizedLevel = Math.min(100, Math.max(0, (metering + 60) * (100 / 60)));
   const segments = Array.from({ length: 15 });
@@ -25,22 +29,22 @@ const VolumeVisualizer = ({ metering }: { metering: number }) => {
         const isActive = normalizedLevel >= threshold;
         let backgroundColor = 'rgba(255,255,255,0.2)';
         if (isActive) {
-          // Renk paleti: Mavi -> Amber -> Kırmızı (Cyan değil)
-          if (index < 8) backgroundColor = '#4FC3F7'; 
-          else if (index < 12) backgroundColor = '#FFD740'; 
-          else backgroundColor = '#FF5252'; 
+          // Color palette: Blue -> Amber -> Red
+          if (index < 8) backgroundColor = '#4FC3F7';
+          else if (index < 12) backgroundColor = '#FFD740';
+          else backgroundColor = '#FF5252';
         }
         return (
-          <View 
-            key={index} 
+          <View
+            key={index}
             style={[
-              styles.vizSegment, 
-              { 
+              styles.vizSegment,
+              {
                 backgroundColor,
                 height: isActive ? 20 + (index * 2) : 8,
-                opacity: isActive ? 1 : 0.5 
+                opacity: isActive ? 1 : 0.5
               }
-            ]} 
+            ]}
           />
         );
       })}
@@ -48,9 +52,13 @@ const VolumeVisualizer = ({ metering }: { metering: number }) => {
   );
 };
 
+/**
+ * Main Application Component.
+ * Orchestrates the Karaoke session, manages UI state, and handles user interactions.
+ */
 export default function App() {
   const [assets] = useAssets([require('./assets/lyrics.srt'), require('./assets/song.mp3')]);
-  
+
   const {
     startSession,
     stopSession,
@@ -71,11 +79,12 @@ export default function App() {
 
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [lyricsLoaded, setLyricsLoaded] = useState(false);
-  
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const resultFadeAnim = useRef(new Animated.Value(0)).current; 
+  const resultFadeAnim = useRef(new Animated.Value(0)).current;
   const resultSlideAnim = useRef(new Animated.Value(50)).current;
 
+  // Load lyrics when assets are ready
   useEffect(() => {
     if (assets) {
       loadLyrics(assets[0]);
@@ -83,12 +92,14 @@ export default function App() {
     requestPermission();
   }, [assets]);
 
+  // Show error alerts
   useEffect(() => {
     if (error) {
       Alert.alert('Error', error);
     }
   }, [error]);
 
+  // Animate result screen when mixing is complete
   useEffect(() => {
     if (mixedFileUri) {
       Animated.parallel([
@@ -111,6 +122,7 @@ export default function App() {
     }
   }, [mixedFileUri]);
 
+  // Pulse animation for the recording button
   useEffect(() => {
     if (isRecording) {
       Animated.loop(
@@ -132,6 +144,10 @@ export default function App() {
     }
   }, [isRecording]);
 
+  /**
+   * Loads and parses the SRT lyrics file.
+   * @param lyricAsset The Expo Asset object for the lyrics file.
+   */
   const loadLyrics = async (lyricAsset: Asset) => {
     try {
       if (!lyricAsset.localUri) await lyricAsset.downloadAsync();
@@ -147,6 +163,10 @@ export default function App() {
     }
   };
 
+  /**
+   * Shares the generated audio file using the native share dialog.
+   * @param uri The URI of the file to share.
+   */
   const shareFile = async (uri: string | null) => {
     if (!uri) return;
     if (!(await Sharing.isAvailableAsync())) {
@@ -156,6 +176,12 @@ export default function App() {
     await Sharing.shareAsync(uri);
   };
 
+  /**
+   * Saves the file to the device storage.
+   * Handles Android Storage Access Framework permissions.
+   * @param uri The URI of the file to save.
+   * @param fileName The desired name for the saved file.
+   */
   const saveFile = async (uri: string | null, fileName: string) => {
     if (!uri) return;
     try {
@@ -176,6 +202,9 @@ export default function App() {
     }
   };
 
+  /**
+   * Resets the session to start over.
+   */
   const handleGoHome = async () => {
     reset();
   };
@@ -184,7 +213,7 @@ export default function App() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#FFD740" />
-        <Text style={{marginTop: 10, color: 'white'}}>Loading Assets...</Text>
+        <Text style={{ marginTop: 10, color: 'white' }}>Loading Assets...</Text>
       </View>
     );
   }
@@ -196,14 +225,14 @@ export default function App() {
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      <SafeAreaView style={{flex: 1}}>
+      <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
           <Text style={styles.title}>Karaoke Star 🎤</Text>
         </View>
 
-        <AudioMixer 
-          songBase64={songBase64} 
-          voiceBase64={voiceBase64} 
+        <AudioMixer
+          songBase64={songBase64}
+          voiceBase64={voiceBase64}
           onMixComplete={handleMixComplete}
           onError={handleMixError}
         />
@@ -218,19 +247,19 @@ export default function App() {
           ) : isRecording ? (
             <View style={{ flex: 1 }}>
               <View style={styles.lyricsContainer}>
-                 <LyricsDisplay lyrics={lyrics} currentTime={positionMillis} />
+                <LyricsDisplay lyrics={lyrics} currentTime={positionMillis} />
               </View>
-              
+
               <View style={styles.recordingControls}>
                 <Text style={styles.recordingLabel}>• REC •</Text>
-                
+
                 <VolumeVisualizer metering={metering} />
 
                 <TouchableOpacity onPress={stopSession}>
                   <Animated.View style={[
-                    styles.button, 
+                    styles.button,
                     styles.stopButton,
-                    { transform: [{ scale: pulseAnim }] } 
+                    { transform: [{ scale: pulseAnim }] }
                   ]}>
                     <View style={styles.stopIcon} />
                     <Text style={[styles.buttonText, styles.stopButtonText]}>STOP</Text>
@@ -241,32 +270,32 @@ export default function App() {
           ) : mixedFileUri ? (
             <View style={styles.center}>
               <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 20 }}>
-                <Animated.View style={{ 
-                  opacity: resultFadeAnim, 
+                <Animated.View style={{
+                  opacity: resultFadeAnim,
                   transform: [{ translateY: resultSlideAnim }],
                   alignItems: 'center',
                   width: '100%'
                 }}>
-                  
+
                   <Text style={{ fontSize: 60, marginBottom: 10 }}>🌟</Text>
-                  
-                  <Text style={[styles.successTitle, {color: 'white'}]}>Performance Ready!</Text>
-                  <Text style={[styles.successSub, {color: '#B0BEC5'}]}>Listen to your masterpiece:</Text>
-                  
+
+                  <Text style={[styles.successTitle, { color: 'white' }]}>Performance Ready!</Text>
+                  <Text style={[styles.successSub, { color: '#B0BEC5' }]}>Listen to your masterpiece:</Text>
+
                   <View style={styles.resultCard}>
                     <AudioPlayer uri={mixedFileUri} title="Karaoke Mix (Final)" />
-                    
+
                     <View style={styles.actionButtonsRow}>
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, styles.shareBtn]} 
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.shareBtn]}
                         onPress={() => shareFile(mixedFileUri)}
                       >
-                         <Ionicons name="share-outline" size={20} color="#fff" style={styles.btnIcon} />
+                        <Ionicons name="share-outline" size={20} color="#fff" style={styles.btnIcon} />
                         <Text style={styles.actionBtnText}>Share Mix</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, styles.downloadBtn]} 
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.downloadBtn]}
                         onPress={() => saveFile(mixedFileUri, 'karaoke_mix.wav')}
                       >
                         <Ionicons name="download-outline" size={20} color="#fff" style={styles.btnIcon} />
@@ -279,26 +308,26 @@ export default function App() {
                     <AudioPlayer uri={voiceFileUri} title="Voice Recording (Raw)" />
 
                     <View style={styles.actionButtonsRow}>
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, styles.purpleBtn]} 
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.purpleBtn]}
                         onPress={() => shareFile(voiceFileUri)}
                       >
                         <Ionicons name="share-outline" size={20} color="#fff" style={styles.btnIcon} />
                         <Text style={styles.actionBtnText}>Share Voice</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, styles.darkBtn]} 
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.darkBtn]}
                         onPress={() => saveFile(voiceFileUri, 'voice.wav')}
                       >
-                         <Ionicons name="download-outline" size={20} color="#fff" style={styles.btnIcon} />
+                        <Ionicons name="download-outline" size={20} color="#fff" style={styles.btnIcon} />
                         <Text style={styles.actionBtnText}>Save Voice</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.homeButton} 
+
+                  <TouchableOpacity
+                    style={styles.homeButton}
                     onPress={handleGoHome}
                   >
                     <Ionicons name="refresh-outline" size={20} color="#fff" style={styles.btnIcon} />
@@ -311,14 +340,14 @@ export default function App() {
           ) : (
             <View style={styles.center}>
               <View style={styles.heroIcon}>
-                <Text style={{fontSize: 60}}>🎧</Text>
+                <Text style={{ fontSize: 60 }}>🎧</Text>
               </View>
-              <Text style={[styles.instructionTitle, {color: 'white'}]}>Ready to Sing?</Text>
-              <Text style={[styles.instruction, {color: '#B0BEC5'}]}>
+              <Text style={[styles.instructionTitle, { color: 'white' }]}>Ready to Sing?</Text>
+              <Text style={[styles.instruction, { color: '#B0BEC5' }]}>
                 Use headphones for the best experience.
               </Text>
               <TouchableOpacity style={[styles.button, styles.startButton]} onPress={startSession}>
-                <Ionicons name="mic" size={24} color="#0f0c29" style={{marginRight: 10}} />
+                <Ionicons name="mic" size={24} color="#0f0c29" style={{ marginRight: 10 }} />
                 <Text style={[styles.buttonText, { color: '#0f0c29' }]}>Start Karaoke</Text>
               </TouchableOpacity>
               {!lyricsLoaded && <Text style={styles.warning}>Lyrics loading...</Text>}
@@ -367,9 +396,9 @@ const styles = StyleSheet.create({
   recordingControls: {
     paddingHorizontal: 30,
     paddingTop: 30,
-    paddingBottom: 60, // <-- STOP Butonu yukarı alındı
+    paddingBottom: 60, // STOP Button moved up
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)', 
+    backgroundColor: 'rgba(0,0,0,0.4)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
@@ -405,7 +434,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   startButton: {
-    backgroundColor: '#FFD740', // <-- Pastel Amber (Cyan yerine)
+    backgroundColor: '#FFD740', // Pastel Amber (instead of Cyan)
     width: '100%',
   },
   stopButton: {
@@ -425,7 +454,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   stopButtonText: {
-    color: '#D32F2F', 
+    color: '#D32F2F',
   },
   successTitle: {
     fontSize: 32,
@@ -439,7 +468,7 @@ const styles = StyleSheet.create({
   },
   resultCard: {
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.1)', 
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 24,
     padding: 20,
     marginBottom: 20,
